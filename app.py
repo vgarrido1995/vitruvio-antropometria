@@ -644,7 +644,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("VITRUVIO — Evaluación Antropométrica")
-        self.geometry("1280x800")
+        self.geometry("1320x860")
         self.minsize(1100, 700)
         self.configure(fg_color=COLORS["bg"])
         self.resizable(True, True)
@@ -922,19 +922,19 @@ class App(ctk.CTk):
     # ── Helpers formulario ──────────────────────
     def _section(self, parent, title):
         f = ctk.CTkFrame(parent, fg_color=COLORS["accent"], corner_radius=6)
-        f.pack(fill="x", padx=2, pady=(10, 2))
+        f.pack(fill="x", padx=2, pady=(8, 1))
         ctk.CTkLabel(f, text=title,
                      font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=COLORS["bg"]).pack(anchor="w", padx=10, pady=4)
+                     text_color=COLORS["bg"]).pack(anchor="w", padx=10, pady=3)
 
     def _row(self, parent, label, key, default="", width=130):
         frm = ctk.CTkFrame(parent, fg_color="transparent")
-        frm.pack(fill="x", padx=4, pady=2)
+        frm.pack(fill="x", padx=4, pady=1)
         ctk.CTkLabel(frm, text=label, width=185, anchor="w",
                      font=ctk.CTkFont(size=10),
                      text_color=COLORS["text"]).pack(side="left")
         var = tk.StringVar(value=str(default))
-        entry = ctk.CTkEntry(frm, textvariable=var, width=width,
+        entry = ctk.CTkEntry(frm, textvariable=var, width=width, height=24,
                              fg_color=COLORS["card"],
                              border_color=COLORS["accent"],
                              text_color=COLORS["text"])
@@ -942,14 +942,35 @@ class App(ctk.CTk):
         self._vars[key] = var
         return var
 
+    def _grid_pair(self, parent, items):
+        """Coloca campos cortos en 2 columnas usando grid. items=[(label,key,val),...]"""
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="x", padx=4, pady=1)
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
+        for i, (lbl, key, val) in enumerate(items):
+            r, c = divmod(i, 2)
+            cell = ctk.CTkFrame(grid, fg_color="transparent")
+            cell.grid(row=r, column=c, sticky="ew", padx=2, pady=1)
+            ctk.CTkLabel(cell, text=lbl, width=90, anchor="w",
+                         font=ctk.CTkFont(size=10),
+                         text_color=COLORS["text"]).pack(side="left")
+            var = tk.StringVar(value=str(val))
+            entry = ctk.CTkEntry(cell, textvariable=var, width=70, height=24,
+                                 fg_color=COLORS["card"],
+                                 border_color=COLORS["accent"],
+                                 text_color=COLORS["text"])
+            entry.pack(side="left", padx=(2, 0))
+            self._vars[key] = var
+
     def _row_combo(self, parent, label, key, options, default=0):
         frm = ctk.CTkFrame(parent, fg_color="transparent")
-        frm.pack(fill="x", padx=4, pady=2)
+        frm.pack(fill="x", padx=4, pady=1)
         ctk.CTkLabel(frm, text=label, width=185, anchor="w",
                      font=ctk.CTkFont(size=10),
                      text_color=COLORS["text"]).pack(side="left")
         var = tk.StringVar(value=options[default])
-        combo = ctk.CTkOptionMenu(frm, variable=var, values=options, width=155,
+        combo = ctk.CTkOptionMenu(frm, variable=var, values=options, width=155, height=24,
                                   fg_color=COLORS["card"],
                                   button_color=COLORS["accent"],
                                   button_hover_color=COLORS["accent2"],
@@ -977,37 +998,35 @@ class App(ctk.CTk):
                         ["Endomorfo", "Mesomorfo", "Ectomorfo", "Mixto"])
 
         self._section(parent, "Pliegues Cutáneos (mm)")
-        for lbl, key, val in [
+        self._grid_pair(parent, [
             ("Bicipital:", "bicipital", 4), ("Tricipital:", "tricipital", 9),
             ("Subescapular:", "subescapular", 17), ("Supra Iliaco:", "suprailiaco", 22),
             ("Abdominal:", "abdominal", 21), ("Muslo:", "muslo", 13),
             ("Pantorrilla:", "pantorrilla", 6),
-        ]:
-            self._row(parent, lbl, key, val)
+        ])
 
         self._section(parent, "Diámetros Óseos (cm)")
-        for lbl, key, val in [
+        self._grid_pair(parent, [
             ("Húmeral:", "humeral", 6.9), ("Femoral:", "femoral", 9.3),
             ("Muñeca:", "muneca", 6.5),
-        ]:
-            self._row(parent, lbl, key, val)
+        ])
 
         self._section(parent, "Perímetros Corporales (cm)")
-        for lbl, key, val in [
-            ("Brazo relajado:", "brazo_relajado", 32.1), ("Brazo en tensión:", "brazo_tension", 34.4),
+        self._grid_pair(parent, [
+            ("Brazo relajado:", "brazo_relajado", 32.1), ("Brazo tensión:", "brazo_tension", 34.4),
             ("Antebrazo:", "antebrazo", 24.3), ("Tórax:", "torax", 98.3),
             ("Cintura:", "cintura", 91.4), ("C. Umbilical:", "c_umbilical", 93.1),
             ("Cadera:", "cadera", 103), ("Muslo:", "muslo_p", 50.1),
             ("Pantorrilla:", "pantorrilla_p", 36),
-        ]:
-            self._row(parent, lbl, key, val)
+        ])
 
         self._section(parent, "Test Ruffier-Dickson (opcional)")
         ctk.CTkLabel(parent,
                      text="  Dejar en 0 si no se realiza el test",
                      font=ctk.CTkFont(size=9), text_color=COLORS["text_dim"]).pack(anchor="w", padx=6)
-        self._row(parent, "FC post-esfuerzo (lpm):", "fc_post", 0)
-        self._row(parent, "FC recuperación (lpm):", "fc_rec", 0)
+        self._grid_pair(parent, [
+            ("FC post-esf:", "fc_post", 0), ("FC recup:", "fc_rec", 0),
+        ])
 
     # ── Botonera inferior ───────────────────────
     def _build_buttons(self):
