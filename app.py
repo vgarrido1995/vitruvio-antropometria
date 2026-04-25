@@ -681,36 +681,30 @@ class App(ctk.CTk):
 
         self._build_inputs(self.scroll)
         self._build_buttons()
-        self._enable_global_mousewheel()
+        # Aplicar el binding de la rueda del mouse a todos los widgets del formulario
+        self.after(100, self._bind_mousewheel_recursive)
 
-    def _enable_global_mousewheel(self):
-        """Permite que la rueda del mouse desplace el formulario izquierdo
-        incluso cuando el cursor está sobre un Entry o ComboBox."""
-        def _on_mousewheel(event):
-            # Si el cursor está sobre el panel derecho (tabs/gráficos), no scrollear el izquierdo
+    def _bind_mousewheel_recursive(self):
+        """Engancha el evento <MouseWheel> a cada widget hijo del scroll
+        izquierdo para que la rueda funcione siempre, incluso sobre Entries."""
+        try:
+            canvas = self.scroll._parent_canvas
+        except Exception:
+            return
+
+        def _on_wheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def _walk(widget):
             try:
-                w = self.winfo_containing(event.x_root, event.y_root)
-            except Exception:
-                w = None
-            if w is None:
-                return
-            # Ascender por la jerarquía buscando si pertenece al scroll izquierdo
-            cur = w
-            in_left = False
-            while cur is not None:
-                if cur is self.scroll:
-                    in_left = True
-                    break
-                cur = getattr(cur, "master", None)
-            if not in_left:
-                return
-            try:
-                canvas = self.scroll._parent_canvas
-                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                widget.bind("<MouseWheel>", _on_wheel, add="+")
             except Exception:
                 pass
-        # Bind global a nivel de toda la aplicación
-        self.bind_all("<MouseWheel>", _on_mousewheel, add="+")
+            for child in widget.winfo_children():
+                _walk(child)
+
+        _walk(self.scroll)
 
     def _build_header(self):
         hdr = ctk.CTkFrame(self, fg_color=COLORS["card"], height=62, corner_radius=0)
