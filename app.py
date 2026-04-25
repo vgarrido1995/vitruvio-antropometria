@@ -252,12 +252,89 @@ def calcular(datos: dict, config: dict = None) -> dict:
 # ─────────────────────────────────────────────
 
 def exportar_csv(datos: dict, resultados: dict, filepath: str):
-    todas = {**datos, **resultados}
+    """Exporta un CSV ordenado por secciones con columnas:
+    Sección | Campo | Valor | Unidad. Separador ';' para Excel español."""
+
+    def fmt(v):
+        if v is None or v == "":
+            return ""
+        if isinstance(v, float):
+            return f"{v:.2f}".replace(".", ",")
+        return str(v)
+
+    secciones = [
+        ("Datos Personales", [
+            ("Nombre",            datos.get("nombre"),    ""),
+            ("Ocupación",         datos.get("ocupacion"), ""),
+            ("Edad",              datos.get("edad"),      "años"),
+            ("Sexo",              datos.get("sexo"),      ""),
+            ("Peso",              datos.get("peso"),      "kg"),
+            ("Talla",             datos.get("talla"),     "m"),
+            ("FC Reposo",         datos.get("fcr"),       "lpm"),
+            ("PA",                datos.get("pa"),        "mmHg"),
+            ("Factor de actividad", datos.get("factor_actividad"), ""),
+            ("Biotipo",           datos.get("biotipo"),   ""),
+        ]),
+        ("Pliegues Cutáneos", [
+            ("Bicipital",     datos.get("bicipital"),     "mm"),
+            ("Tricipital",    datos.get("tricipital"),    "mm"),
+            ("Subescapular",  datos.get("subescapular"),  "mm"),
+            ("Supra Iliaco",  datos.get("suprailiaco"),   "mm"),
+            ("Abdominal",     datos.get("abdominal"),     "mm"),
+            ("Muslo",         datos.get("muslo"),         "mm"),
+            ("Pantorrilla",   datos.get("pantorrilla"),   "mm"),
+            ("Suma de pliegues",      resultados.get("suma_pliegues"),      "mm"),
+        ]),
+        ("Diámetros Óseos", [
+            ("Húmeral",  datos.get("humeral"),  "cm"),
+            ("Femoral",  datos.get("femoral"),  "cm"),
+            ("Muñeca",   datos.get("muneca"),   "cm"),
+        ]),
+        ("Perímetros Corporales", [
+            ("Brazo relajado",   datos.get("brazo_relajado"),  "cm"),
+            ("Brazo en tensión", datos.get("brazo_tension"),   "cm"),
+            ("Antebrazo",        datos.get("antebrazo"),       "cm"),
+            ("Tórax",            datos.get("torax"),           "cm"),
+            ("Cintura",          datos.get("cintura"),         "cm"),
+            ("C. Umbilical",     datos.get("c_umbilical"),     "cm"),
+            ("Cadera",           datos.get("cadera"),          "cm"),
+            ("Muslo",            datos.get("muslo_p"),         "cm"),
+            ("Pantorrilla",      datos.get("pantorrilla_p"),   "cm"),
+        ]),
+        ("Composición Corporal (4 componentes)", [
+            ("Densidad Corporal",  resultados.get("densidad_corporal"), "g/cc"),
+            ("Grasa Corporal",     resultados.get("grasa_pct"),         "%"),
+            ("Clasificación grasa", resultados.get("clasificacion_grasa"), ""),
+            ("Masa Grasa",         resultados.get("masa_grasa"),        "kg"),
+            ("Masa Grasa %",       resultados.get("masa_grasa_pct"),    "%"),
+            ("Masa Ósea",          resultados.get("masa_osea"),         "kg"),
+            ("Masa Ósea %",        resultados.get("masa_osea_pct"),     "%"),
+            ("Masa Muscular",      resultados.get("masa_muscular"),     "kg"),
+            ("Masa Muscular %",    resultados.get("masa_muscular_pct"), "%"),
+            ("Masa Residual",      resultados.get("masa_residual"),     "kg"),
+            ("Masa Residual %",    resultados.get("masa_residual_pct"), "%"),
+        ]),
+        ("Índices", [
+            ("IMC",                resultados.get("imc"),               "kg/m²"),
+            ("Clasificación IMC",  resultados.get("clasificacion_imc"), ""),
+            ("ICC (cintura/cadera)", resultados.get("icc"),             ""),
+            ("Tipo de obesidad",   resultados.get("tipo_obesidad"),     ""),
+        ]),
+        ("Metabolismo y Condición Física", [
+            ("FC Máxima calc.",       resultados.get("fcm"),             "lpm"),
+            ("TMB",                   resultados.get("tmb"),             "kcal/día"),
+            ("Ruffier-Dickson",       resultados.get("ruffier_dickson"), ""),
+            ("Clasificación Ruffier", resultados.get("ruffier_clasif"),  ""),
+        ]),
+    ]
+
     with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Campo", "Valor"])
-        for k, v in todas.items():
-            writer.writerow([k, v])
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(["Sección", "Campo", "Valor", "Unidad"])
+        for seccion, filas in secciones:
+            for campo, valor, unidad in filas:
+                writer.writerow([seccion, campo, fmt(valor), unidad])
+            writer.writerow(["", "", "", ""])  # línea en blanco entre secciones
 
 
 # ─────────────────────────────────────────────
