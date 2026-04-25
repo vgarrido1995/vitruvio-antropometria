@@ -441,6 +441,71 @@ def exportar_pdf(datos: dict, resultados: dict, filepath: str):
     seccion("Biotipo")
     fila("Biotipo", datos.get("biotipo", ""))
 
+    # ── Página de gráficos ───────────────────────────────
+    try:
+        import tempfile, os
+        from matplotlib.figure import Figure
+
+        chart_files = []
+        specs = [
+            ("Composición Corporal", build_chart_composicion, (resultados,), (5.5, 4.0)),
+            ("Pliegues Cutáneos (mm)", build_chart_pliegues, (datos,),       (5.5, 3.5)),
+            ("IMC", build_chart_imc, (resultados,),                          (5.5, 3.0)),
+        ]
+        for titulo, builder, args, size in specs:
+            fig = Figure(figsize=size, dpi=140, facecolor="white")
+            try:
+                builder(fig, *args)
+                # Forzar fondo blanco en todos los ejes para imprimir bien
+                for ax in fig.get_axes():
+                    ax.set_facecolor("white")
+                    for spine in ax.spines.values():
+                        spine.set_color("#333333")
+                    ax.tick_params(colors="#333333")
+                    if ax.get_title():
+                        ax.set_title(ax.get_title(), color="#1e3a5f")
+                    for txt in ax.texts:
+                        # cambiar texto blanco/dim a negro para impresión
+                        c = txt.get_color()
+                        if c in ("#e7ecf3", "#8aa1bd", "white"):
+                            txt.set_color("#1a1a1a")
+                fig.set_facecolor("white")
+            except Exception:
+                continue
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            tmp.close()
+            fig.savefig(tmp.name, dpi=140, facecolor="white", bbox_inches="tight")
+            chart_files.append((titulo, tmp.name))
+
+        if chart_files:
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.set_text_color(30, 60, 110)
+            pdf.cell(0, 8, _safe("Graficos de Evaluacion"), ln=True, align="C")
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(2)
+
+            for titulo, png in chart_files:
+                pdf.set_font("Helvetica", "B", 11)
+                pdf.set_fill_color(30, 90, 160)
+                pdf.set_text_color(255, 255, 255)
+                pdf.cell(0, 6, _safe(f"  {titulo}"), ln=True, fill=True)
+                pdf.set_text_color(0, 0, 0)
+                pdf.ln(1)
+                # Centrar imagen con ancho ~170mm
+                pdf.image(png, x=20, w=170)
+                pdf.ln(3)
+
+        # Limpiar PNGs temporales
+        for _, png in chart_files:
+            try:
+                os.unlink(png)
+            except Exception:
+                pass
+    except Exception:
+        # Si falla la inserción de gráficos, igual entregamos el PDF tabular
+        pass
+
     pdf.output(filepath)
 
 
