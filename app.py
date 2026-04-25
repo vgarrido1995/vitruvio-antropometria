@@ -71,7 +71,9 @@ def calcular(datos: dict, config: dict = None) -> dict:
         res["suma_pliegues"] = round(suma_pli, 2)
 
         # ── Densidad corporal
-        dc_formula = config.get("densidad", "Durnin & Womersley (7 pliegues)")
+        dc_formula = config.get("densidad", "Durnin & Womersley (4 pliegues)")
+        # Suma de 4 pliegues estándar D&W: bicipital + tricipital + subescapular + suprailiaco
+        sum_dw = bici + tri + sub + supil
         if suma_pli > 0:
             if "Jackson" in dc_formula and "♂" in dc_formula:
                 s = bici + abd + muslo  # pecho aprox. bicipital
@@ -79,11 +81,28 @@ def calcular(datos: dict, config: dict = None) -> dict:
             elif "Jackson" in dc_formula and "♀" in dc_formula:
                 s = tri + supil + muslo
                 dc = 1.0994921 - 0.0009929*s + 0.0000023*(s**2) - 0.0001392*edad
-            else:  # Durnin & Womersley por defecto
-                dc = 1.0988 - 0.0004 * math.log10(suma_pli)
+            else:
+                # Durnin & Womersley (1974) — 4 pliegues, coeficientes por sexo y edad
+                if sum_dw > 0:
+                    log_sum = math.log10(sum_dw)
+                    if sexo == "Masculino":
+                        if   edad < 20: c, k = 1.1620, 0.0630
+                        elif edad < 30: c, k = 1.1631, 0.0632
+                        elif edad < 40: c, k = 1.1422, 0.0544
+                        elif edad < 50: c, k = 1.1620, 0.0700
+                        else:           c, k = 1.1715, 0.0779
+                    else:
+                        if   edad < 20: c, k = 1.1549, 0.0678
+                        elif edad < 30: c, k = 1.1599, 0.0717
+                        elif edad < 40: c, k = 1.1423, 0.0632
+                        elif edad < 50: c, k = 1.1333, 0.0612
+                        else:           c, k = 1.1339, 0.0645
+                    dc = c - k * log_sum
+                else:
+                    dc = 0
         else:
             dc = 0
-        res["densidad_corporal"] = round(dc, 6)
+        res["densidad_corporal"] = round(dc, 5)
 
         # ── Grasa corporal %
         grasa_formula = config.get("grasa_pct", "Siri (1956)")
@@ -97,15 +116,36 @@ def calcular(datos: dict, config: dict = None) -> dict:
         res["grasa_pct"] = round(gc_pct, 2)
 
         # ── 4 componentes Rose & Gurfinkel
-        masa_grasa    = (tri + sub + supil + abd * 0.153) + 5.783
-        masa_osea     = 3.02 * (talla**2 * femoral * muneca * 400) ** 0.712
-        masa_residual = peso * 24.1 / 100
+        # ── 4 componentes (Matiegka / Drinkwater-Ross)
+        # Masa Grasa por Faulkner (1968):
+        #   %Grasa = 5.783 + 0.153 × Σ(tri+sub+supil+abd)
+        #   MG (kg) = peso × %Grasa / 100
+        sum4 = tri + sub + supil + abd
+        pct_grasa_faulkner = 5.783 + 0.153 * sum4
+        masa_grasa = peso * pct_grasa_faulkner / 100
+
+        # Masa Ósea (Rocha 1975 / Von Döbeln):
+        #   MO (g) = 3.02 × (h² × femoral × muñeca × 400)^0.712
+        #   MO (kg) = MO(g) / 1000        ← el Excel tenía este bug
+        masa_osea = 3.02 * (talla**2 * femoral * muneca * 400) ** 0.712 / 1000
+
+        # Masa Residual (Würch 1974) — sexo-dependiente
+        if sexo == "Masculino":
+            masa_residual = peso * 0.241   # 24.1 %
+        else:
+            masa_residual = peso * 0.209   # 20.9 %
+
+        # Masa Muscular = Peso − (grasa + ósea + residual)
         masa_muscular = peso - (masa_grasa + masa_osea + masa_residual)
 
-        res["masa_grasa"]    = round(masa_grasa, 3)
-        res["masa_osea"]     = round(masa_osea, 3)
-        res["masa_residual"] = round(masa_residual, 3)
-        res["masa_muscular"] = round(masa_muscular, 3)
+        res["masa_grasa"]    = round(masa_grasa, 2)
+        res["masa_osea"]     = round(masa_osea, 2)
+        res["masa_residual"] = round(masa_residual, 2)
+        res["masa_muscular"] = round(masa_muscular, 2)
+        res["masa_grasa_pct"]    = round(masa_grasa / peso * 100, 1) if peso > 0 else 0
+        res["masa_osea_pct"]     = round(masa_osea / peso * 100, 1) if peso > 0 else 0
+        res["masa_residual_pct"] = round(masa_residual / peso * 100, 1) if peso > 0 else 0
+        res["masa_muscular_pct"] = round(masa_muscular / peso * 100, 1) if peso > 0 else 0
 
         # ── IMC
         res["imc"] = round(peso / talla**2, 2)
@@ -116,12 +156,25 @@ def calcular(datos: dict, config: dict = None) -> dict:
         else:
             res["icc"] = 0
 
-        # ── Ruffier-Dickson
+        # ── Ruffier-Dickson (índice de recuperación cardiovascular)
+        #   IRD = ((P1 + P2 + P3) − 200) / 10
+        #   donde P1=FC reposo, P2=FC post-esfuerzo, P3=FC recuperación a 1′
         if fc_post > 0 and fc_rec > 0:
-            rd = (4 * (fcr + fc_post + fc_rec) - 200) / 10
+            rd = ((fcr + fc_post + fc_rec) - 200) / 10
             res["ruffier_dickson"] = round(rd, 2)
+            if rd < 0:
+                res["ruffier_clasif"] = "Excelente"
+            elif rd < 5:
+                res["ruffier_clasif"] = "Muy bueno"
+            elif rd < 10:
+                res["ruffier_clasif"] = "Bueno"
+            elif rd < 15:
+                res["ruffier_clasif"] = "Regular"
+            else:
+                res["ruffier_clasif"] = "Insuficiente"
         else:
             res["ruffier_dickson"] = None
+            res["ruffier_clasif"] = None
 
         # ── TMB
         tmb_formula = config.get("tmb", "Harris-Benedict (1919)")
@@ -263,11 +316,11 @@ def exportar_pdf(datos: dict, resultados: dict, filepath: str):
     fila("Muñeca", datos.get("muneca", ""))
     pdf.ln(2)
 
-    seccion("Composición Corporal — 4 Componentes (Rose y Gurfinkel)")
-    fila("Masa Grasa (kg)", resultados.get("masa_grasa", ""))
-    fila("Masa Ósea (kg)", resultados.get("masa_osea", ""))
-    fila("Masa Muscular (kg)", resultados.get("masa_muscular", ""))
-    fila("Masa Residual (kg)", resultados.get("masa_residual", ""))
+    seccion("Composicion Corporal - 4 Componentes (Matiegka)")
+    fila("Masa Grasa (kg)", f"{resultados.get('masa_grasa','')}  ({resultados.get('masa_grasa_pct','')} %)")
+    fila("Masa Osea (kg)",  f"{resultados.get('masa_osea','')}  ({resultados.get('masa_osea_pct','')} %)")
+    fila("Masa Muscular (kg)", f"{resultados.get('masa_muscular','')}  ({resultados.get('masa_muscular_pct','')} %)")
+    fila("Masa Residual (kg)", f"{resultados.get('masa_residual','')}  ({resultados.get('masa_residual_pct','')} %)")
     pdf.ln(2)
 
     seccion("Índices")
@@ -282,10 +335,10 @@ def exportar_pdf(datos: dict, resultados: dict, filepath: str):
         fila(l, datos.get(k, ""))
     pdf.ln(2)
 
-    seccion("Metabolismo y Condición Física")
-    fila("TMB (Harris-Benedict) kcal/día", resultados.get("tmb", ""))
+    seccion("Metabolismo y Condicion Fisica")
+    fila("TMB (kcal/dia)", resultados.get("tmb", ""))
     if resultados.get("ruffier_dickson") is not None:
-        fila("Ruffier-Dickson", resultados.get("ruffier_dickson", ""))
+        fila("Ruffier-Dickson", f"{resultados.get('ruffier_dickson','')}  ({resultados.get('ruffier_clasif','')})")
     fila("Factor de actividad", datos.get("factor_actividad", ""))
     pdf.ln(2)
 
@@ -302,14 +355,15 @@ def exportar_pdf(datos: dict, resultados: dict, filepath: str):
 FORMULA_OPTS = {
     "densidad": {
         "label": "Densidad Corporal",
-        "default": "Durnin & Womersley (7 pliegues)",
+        "default": "Durnin & Womersley (4 pliegues)",
         "options": {
-            "Durnin & Womersley (7 pliegues)": {
+            "Durnin & Womersley (4 pliegues)": {
                 "ref": "Durnin & Womersley, 1974. Br J Nutrition 32:77-97",
-                "desc": "Estándar ISAK. Válida para adultos de ambos sexos 17-72 años. "
-                        "Usa la suma logarítmica de los 7 pliegues principales. "
-                        "Es la más usada en evaluaciones de campo.",
-                "eq": "DC = 1.0988 − 0.0004 × log₁₀(Σ7 pliegues)",
+                "desc": "Estándar internacional. Usa 4 pliegues (bicipital + tricipital + "
+                        "subescapular + supra-iliaco) con coeficientes específicos por sexo "
+                        "y grupo etario. Validada en >480 adultos. Es la más usada en ISAK.",
+                "eq": "DC = c − k × log₁₀(Σ4pl)\n"
+                      "(c, k varían por sexo y rango de edad)",
             },
             "Jackson & Pollock 3 pl. (♂)": {
                 "ref": "Jackson & Pollock, 1978. Br J Nutrition 40:497",
@@ -483,7 +537,7 @@ def build_chart_composicion(fig, res: dict):
         at.set_fontweight("bold")
 
     ax.legend(
-        wedges, [f"{l}\n{v:.1f} kg" for l, v in zip(labels, vals)],
+        wedges, [f"{l}\n{v:.1f} kg ({v/total*100:.1f}%)" for l, v in zip(labels, vals)],
         loc="lower center", bbox_to_anchor=(0.5, -0.22),
         ncol=2, fontsize=7.5,
         framealpha=0, labelcolor=COLORS["text"],
@@ -686,11 +740,15 @@ class App(ctk.CTk):
                 ("Grasa Corporal", "grasa_pct", "%"),
                 ("Clasif. Grasa", "clasificacion_grasa", ""),
             ]),
-            ("4 Componentes (Rose & G.)", [
+            ("4 Componentes (Matiegka)", [
                 ("Masa Grasa", "masa_grasa", "kg"),
+                ("% Grasa (Faulkner)", "masa_grasa_pct", "%"),
                 ("Masa Ósea", "masa_osea", "kg"),
+                ("% Ósea", "masa_osea_pct", "%"),
                 ("Masa Muscular", "masa_muscular", "kg"),
+                ("% Muscular", "masa_muscular_pct", "%"),
                 ("Masa Residual", "masa_residual", "kg"),
+                ("% Residual", "masa_residual_pct", "%"),
             ]),
             ("Índices Corporales", [
                 ("IMC", "imc", "kg/m²"),
@@ -698,9 +756,10 @@ class App(ctk.CTk):
                 ("ICC", "icc", ""),
                 ("Tipo Obesidad", "tipo_obesidad", ""),
             ]),
-            ("Metabolismo", [
+            ("Metabolismo y Condición", [
                 ("TMB", "tmb", "kcal/día"),
                 ("Ruffier-Dickson", "ruffier_dickson", ""),
+                ("Clasif. Ruffier", "ruffier_clasif", ""),
             ]),
         ]
         for grupo_title, campos in grupos:
