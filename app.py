@@ -342,29 +342,48 @@ def exportar_csv(datos: dict, resultados: dict, filepath: str):
 # ─────────────────────────────────────────────
 
 def exportar_pdf(datos: dict, resultados: dict, filepath: str):
+    # fpdf con Helvetica solo soporta latin-1; reemplazar caracteres conflictivos
+    _replacements = {
+        "—": "-", "–": "-", "•": "-", "→": "->", "←": "<-",
+        "²": "2", "³": "3", "₁": "1", "₀": "0",
+        "·": "-", "“": '"', "”": '"', "‘": "'", "’": "'",
+        "…": "...", "≥": ">=", "≤": "<=", "≠": "!=", "±": "+/-",
+    }
+    def _safe(t):
+        if t is None:
+            return ""
+        s = str(t)
+        for k, v in _replacements.items():
+            s = s.replace(k, v)
+        try:
+            s.encode("latin-1")
+            return s
+        except UnicodeEncodeError:
+            return s.encode("latin-1", "replace").decode("latin-1")
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # Título
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Ficha de Evaluación Antropométrica", ln=True, align="C")
+    pdf.cell(0, 10, _safe("Ficha de Evaluacion Antropometrica"), ln=True, align="C")
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 5, "Formulas: ISAK / Durnin-Womersley / Rose y Gurfinkel — ver configuracion de formulas", ln=True, align="C")
+    pdf.cell(0, 5, _safe("Formulas: ISAK / Durnin-Womersley / Rose y Gurfinkel - ver configuracion de formulas"), ln=True, align="C")
     pdf.ln(4)
 
     def seccion(titulo):
         pdf.set_fill_color(30, 90, 160)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 7, f"  {titulo}", ln=True, fill=True)
+        pdf.cell(0, 7, _safe(f"  {titulo}"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "", 10)
 
     def fila(label, value, fill=False):
         pdf.set_fill_color(235, 240, 255)
-        pdf.cell(90, 6, f"  {label}", border=1, fill=fill)
-        pdf.cell(100, 6, f"  {value}", border=1, fill=fill, ln=True)
+        pdf.cell(90, 6, _safe(f"  {label}"), border=1, fill=fill)
+        pdf.cell(100, 6, _safe(f"  {value}"), border=1, fill=fill, ln=True)
 
     seccion("Datos Personales")
     fila("Nombre", datos.get("nombre", ""))
@@ -614,13 +633,14 @@ def build_chart_composicion(fig, res: dict):
         at.set_fontweight("bold")
 
     ax.legend(
-        wedges, [f"{l}\n{v:.1f} kg ({v/total*100:.1f}%)" for l, v in zip(labels, vals)],
-        loc="lower center", bbox_to_anchor=(0.5, -0.22),
-        ncol=2, fontsize=7.5,
+        wedges, [f"{l}: {v:.1f} kg ({v/total*100:.1f}%)" for l, v in zip(labels, vals)],
+        loc="lower center", bbox_to_anchor=(0.5, -0.10),
+        ncol=4, fontsize=7.5,
         framealpha=0, labelcolor=COLORS["text"],
     )
     ax.set_title("Composición Corporal", color=COLORS["accent"],
                  fontsize=10, fontweight="bold", pad=8)
+    fig.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.18)
 
 
 def build_chart_pliegues(fig, datos: dict):
@@ -1180,6 +1200,8 @@ class App(ctk.CTk):
     def _export_csv(self):
         if not self._resultados:
             self._calcular()
+        if not self._resultados:
+            return
         path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv")],
@@ -1187,12 +1209,19 @@ class App(ctk.CTk):
             title="Guardar CSV")
         if not path:
             return
-        exportar_csv(self._get_datos(), self._resultados, path)
-        messagebox.showinfo("VITRUVIO", f"CSV guardado en:\n{path}")
+        try:
+            exportar_csv(self._get_datos(), self._resultados, path)
+            messagebox.showinfo("VITRUVIO", f"CSV guardado en:\n{path}")
+        except Exception as e:
+            import traceback
+            messagebox.showerror("Error al exportar CSV",
+                                 f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
 
     def _export_pdf(self):
         if not self._resultados:
             self._calcular()
+        if not self._resultados:
+            return
         path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF", "*.pdf")],
@@ -1200,8 +1229,13 @@ class App(ctk.CTk):
             title="Guardar PDF")
         if not path:
             return
-        exportar_pdf(self._get_datos(), self._resultados, path)
-        messagebox.showinfo("VITRUVIO", f"PDF guardado en:\n{path}")
+        try:
+            exportar_pdf(self._get_datos(), self._resultados, path)
+            messagebox.showinfo("VITRUVIO", f"PDF guardado en:\n{path}")
+        except Exception as e:
+            import traceback
+            messagebox.showerror("Error al exportar PDF",
+                                 f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
 
     def _limpiar(self):
         for k, v in self._vars.items():
