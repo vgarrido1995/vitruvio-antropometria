@@ -665,8 +665,14 @@ class App(ctk.CTk):
         left = ctk.CTkFrame(body, fg_color=COLORS["panel"], corner_radius=12)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         self.scroll = ctk.CTkScrollableFrame(left, fg_color="transparent",
-                                             scrollbar_button_color=COLORS["accent"])
+                                             scrollbar_button_color=COLORS["accent"],
+                                             scrollbar_button_hover_color=COLORS["accent2"])
         self.scroll.pack(fill="both", expand=True, padx=4, pady=4)
+        # Forzar barra de scroll un poco más ancha y visible
+        try:
+            self.scroll._scrollbar.configure(width=16)
+        except Exception:
+            pass
 
         # Columna derecha — tabs (resultados + gráficos)
         right = ctk.CTkFrame(body, fg_color=COLORS["panel"], corner_radius=12)
@@ -675,6 +681,36 @@ class App(ctk.CTk):
 
         self._build_inputs(self.scroll)
         self._build_buttons()
+        self._enable_global_mousewheel()
+
+    def _enable_global_mousewheel(self):
+        """Permite que la rueda del mouse desplace el formulario izquierdo
+        incluso cuando el cursor está sobre un Entry o ComboBox."""
+        def _on_mousewheel(event):
+            # Si el cursor está sobre el panel derecho (tabs/gráficos), no scrollear el izquierdo
+            try:
+                w = self.winfo_containing(event.x_root, event.y_root)
+            except Exception:
+                w = None
+            if w is None:
+                return
+            # Ascender por la jerarquía buscando si pertenece al scroll izquierdo
+            cur = w
+            in_left = False
+            while cur is not None:
+                if cur is self.scroll:
+                    in_left = True
+                    break
+                cur = getattr(cur, "master", None)
+            if not in_left:
+                return
+            try:
+                canvas = self.scroll._parent_canvas
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except Exception:
+                pass
+        # Bind global a nivel de toda la aplicación
+        self.bind_all("<MouseWheel>", _on_mousewheel, add="+")
 
     def _build_header(self):
         hdr = ctk.CTkFrame(self, fg_color=COLORS["card"], height=62, corner_radius=0)
